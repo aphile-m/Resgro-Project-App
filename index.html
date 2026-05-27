@@ -760,6 +760,20 @@ table.pl tr.pl-cash td:first-child{color:var(--gold-l);font-weight:700}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--faint)}
 
+/* ── CLOUD SYNC TOOLBAR ── */
+.cs-bar{display:flex;align-items:center;gap:6px;flex:1;justify-content:center;margin:0 16px}
+.cs-picker{background:var(--inp);border:1px solid var(--inp-b);color:var(--blue);font-family:'DM Mono',monospace;font-size:11px;padding:5px 9px;border-radius:var(--r);outline:none;max-width:220px;cursor:pointer;transition:border .15s}
+.cs-picker:hover,.cs-picker:focus{border-color:var(--gold)}
+.cs-btn{background:var(--surf2);border:1px solid var(--border);color:var(--muted);font-family:'Outfit',sans-serif;font-size:10px;font-weight:600;padding:5px 9px;border-radius:var(--r);cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.cs-btn:hover{color:var(--text);border-color:var(--gold-d);background:rgba(200,149,42,.08)}
+.cs-btn-del{padding:5px 7px;color:var(--faint)}
+.cs-btn-del:hover{color:var(--red);border-color:rgba(224,80,80,.3);background:rgba(224,80,80,.06)}
+.cs-status{font-size:10px;color:var(--muted);font-family:'Outfit',sans-serif;letter-spacing:.04em;white-space:nowrap;min-width:90px;padding-left:6px}
+.cs-status.cs-ok{color:var(--green)}
+.cs-status.cs-warn{color:var(--gold-l)}
+.cs-status.cs-err{color:var(--red)}
+.cs-status.cs-sync{color:var(--blue)}
+
 /* ── MOBILE ── */
 .asm-toggle{display:none !important}
 @media (max-width:720px){
@@ -768,6 +782,11 @@ table.pl tr.pl-cash td:first-child{color:var(--gold-l);font-weight:700}
   .brand-name{font-size:16px}
   .brand-sub{display:none}
   .tag{font-size:9px;padding:2px 7px;letter-spacing:.04em}
+
+  .cs-bar{gap:4px;margin:0 6px}
+  .cs-picker{font-size:10px;padding:4px 6px;max-width:110px}
+  .cs-btn{font-size:9px;padding:4px 6px;letter-spacing:.03em}
+  .cs-status{display:none}
 
   .kpis{padding:5px 6px;gap:3px}
   .kpi{flex:1 1 calc(50% - 3px);min-width:0;padding:5px 8px}
@@ -868,7 +887,14 @@ table.pl tr.pl-cash td:first-child{color:var(--gold-l);font-weight:700}
     <span class=&quot;brand-name&quot;>Resgro Capital</span>
     <span class=&quot;brand-sub&quot;>Asset Origination &amp;amp; Structuring — P1</span>
   </div>
-  <span class=&quot;tag&quot;>P1 Financial Model — Year 1</span>
+  <div class=&quot;cs-bar&quot;>
+    <select id=&quot;cs-version-picker&quot; class=&quot;cs-picker&quot; onchange=&quot;CSwitch(this.value)&quot; title=&quot;Switch version&quot;></select>
+    <button class=&quot;cs-btn&quot; onclick=&quot;CSaveAs()&quot; title=&quot;Save current state as a new named version&quot;>+ Version</button>
+    <button class=&quot;cs-btn&quot; onclick=&quot;CSetDefault()&quot; title=&quot;Set the active version as the team default&quot;>★ Default</button>
+    <button class=&quot;cs-btn cs-btn-del&quot; onclick=&quot;CDelete()&quot; title=&quot;Delete the active version&quot;>🗑</button>
+    <span id=&quot;cs-status&quot; class=&quot;cs-status&quot;>…</span>
+  </div>
+  <span class=&quot;tag&quot;>P1 Model</span>
 </header>
 
 <!-- KPI BAR -->
@@ -1461,6 +1487,7 @@ function compute(){
   updateKPIs(pl,a);
   renderPL(pl,a);
   renderCards(pl,a);
+  if(window.CS &amp;&amp; window.CS.ready) CScheduleSave();
 }
 
 function showTab(name,btn){
@@ -1596,13 +1623,242 @@ function changeFontSize(delta){
     document.body.style.userSelect = '';
   });
 })();
-document.addEventListener('DOMContentLoaded',()=>{
+// ══════════════════════════════════════════════
+// CLOUD SYNC — shared p1_versions table on Supabase
+// ══════════════════════════════════════════════
+window.CS={sb:null,me:null,activeId:null,activeName:'',versions:[],ready:false,hydrating:false,saveTimer:null};
+
+function CStatus(text,cls){
+  const el=document.getElementById('cs-status');
+  if(!el) return;
+  el.textContent=text;
+  el.className='cs-status'+(cls?' '+cls:'');
+}
+
+function CGetState(){
+  const fx=parseFloat(document.getElementById('a-fx').value)||19;
+  const gfee=parseFloat(document.getElementById('a-gfee').value)||0;
+  const osh=parseFloat(document.getElementById('a-osh').value)||0;
+  const psh=parseFloat(document.getElementById('a-psh').value)||0;
+  const kela=parseFloat(document.getElementById('a-kela').value)||0;
+  const costs=[...document.querySelectorAll('#costBody tr')].map(tr=>{
+    const i=tr.querySelectorAll('input');
+    return{l:tr.dataset.l,a:N(i[0].value),sm:N(i[1].value)||1};
+  });
+  const draws=[...document.querySelectorAll('#drawCont .drow')].map(r=>{
+    const i=r.querySelectorAll('input');
+    return{mo:N(i[0].value),amt:N(i[1].value)};
+  });
+  return{deals:JSON.parse(JSON.stringify(deals)),assumptions:{fx,gfee_bps:gfee,osh,psh,kela,costs,draws}};
+}
+
+function CApplyState(st){
+  if(!st||typeof st!=='object') return;
+  window.CS.hydrating=true;
+  try{
+    if(Array.isArray(st.deals)){
+      deals=st.deals.map(d=>({...d}));
+      nextId=Math.max(0,...deals.map(d=>+d.id||0))+1;
+    }
+    const a=st.assumptions||{};
+    if(a.fx!=null) document.getElementById('a-fx').value=a.fx;
+    if(a.gfee_bps!=null) document.getElementById('a-gfee').value=a.gfee_bps;
+    if(a.osh!=null) document.getElementById('a-osh').value=a.osh;
+    if(a.psh!=null) document.getElementById('a-psh').value=a.psh;
+    if(a.kela!=null) document.getElementById('a-kela').value=a.kela;
+    if(Array.isArray(a.costs)){
+      const rows=document.querySelectorAll('#costBody tr');
+      a.costs.forEach((c,i)=>{
+        if(rows[i]){
+          const inps=rows[i].querySelectorAll('input');
+          if(c.a!=null) inps[0].value=c.a;
+          if(c.sm!=null) inps[1].value=c.sm;
+        }
+      });
+    }
+    if(Array.isArray(a.draws)){
+      const rows=document.querySelectorAll('#drawCont .drow');
+      a.draws.forEach((d,i)=>{
+        if(rows[i]){
+          const inps=rows[i].querySelectorAll('input');
+          if(d.mo!=null) inps[0].value=d.mo;
+          if(d.amt!=null) inps[1].value=d.amt;
+        }
+      });
+    }
+    const ga2=ga();
+    renderDealTable(ga2);
+  }finally{
+    window.CS.hydrating=false;
+  }
+}
+
+async function CLoadVersions(){
+  const{data,error}=await window.CS.sb.from('p1_versions').select('*').order('is_default',{ascending:false}).order('updated_at',{ascending:false});
+  if(error){console.error('CLoadVersions',error);return[];}
+  window.CS.versions=data||[];
+  return window.CS.versions;
+}
+
+function CRenderPicker(){
+  const sel=document.getElementById('cs-version-picker');
+  if(!sel) return;
+  sel.innerHTML=window.CS.versions.map(v=>{
+    const star=v.is_default?'★ ':'';
+    const safe=(v.name||'(unnamed)').replace(/&amp;/g,'&amp;amp;').replace(/</g,'&amp;lt;');
+    return`<option value=&quot;${v.id}&quot;${v.id===window.CS.activeId?' selected':''}>${star}${safe}</option>`;
+  }).join('');
+}
+
+async function CInit(){
+  // Wait up to ~3s for the parent app to expose its Supabase handle.
+  let tries=0;
+  while(tries<30){
+    try{
+      if(window.parent &amp;&amp; window.parent.__resgro &amp;&amp; window.parent.__resgro.sb) break;
+    }catch(e){break;}
+    await new Promise(r=>setTimeout(r,100));
+    tries++;
+  }
+  let parentSb=null,parentMe=null;
+  try{
+    parentSb=window.parent &amp;&amp; window.parent.__resgro &amp;&amp; window.parent.__resgro.sb;
+    parentMe=window.parent &amp;&amp; window.parent.__resgro &amp;&amp; window.parent.__resgro.getMe &amp;&amp; window.parent.__resgro.getMe();
+  }catch(e){/* cross-origin block */}
+  if(!parentSb){CStatus('Local only','cs-warn');return;}
+  window.CS.sb=parentSb;
+  window.CS.me=parentMe;
+  if(!parentMe){CStatus('Sign in to sync','cs-warn');return;}
+  CStatus('Loading…','cs-sync');
+  try{
+    await CLoadVersions();
+    let active=window.CS.versions.find(v=>v.is_default);
+    if(!active &amp;&amp; window.CS.versions.length===0){
+      // First-ever load — seed the default version with the model's current state.
+      const initialState=CGetState();
+      const{data,error}=await window.CS.sb.from('p1_versions').insert({
+        name:'Current',is_default:true,data:initialState,
+        created_by:parentMe.id,updated_by:parentMe.id
+      }).select().single();
+      if(error){console.error('seed Current',error);CStatus('Init error: '+error.message,'cs-err');return;}
+      window.CS.versions=[data];
+      active=data;
+    }
+    if(!active) active=window.CS.versions[0];
+    window.CS.activeId=active.id;
+    window.CS.activeName=active.name;
+    CApplyState(active.data||{});
+    CRenderPicker();
+    window.CS.ready=true;
+    CStatus('Synced — '+active.name,'cs-ok');
+  }catch(err){
+    console.error('CInit',err);
+    CStatus('Sync error','cs-err');
+  }
+}
+
+function CScheduleSave(){
+  if(window.CS.hydrating||!window.CS.sb||!window.CS.activeId) return;
+  clearTimeout(window.CS.saveTimer);
+  CStatus('Saving…','cs-sync');
+  window.CS.saveTimer=setTimeout(async()=>{
+    try{
+      const state=CGetState();
+      const{error}=await window.CS.sb.from('p1_versions').update({
+        data:state,updated_by:window.CS.me?window.CS.me.id:null
+      }).eq('id',window.CS.activeId);
+      if(error){CStatus('Save error','cs-err');console.error('save',error);return;}
+      CStatus('Synced — '+window.CS.activeName,'cs-ok');
+      // Refresh version list so updated_at ordering is current.
+      const i=window.CS.versions.findIndex(v=>v.id===window.CS.activeId);
+      if(i>=0) window.CS.versions[i].updated_at=new Date().toISOString();
+    }catch(e){console.error('save',e);CStatus('Save error','cs-err');}
+  },1200);
+}
+
+window.CSwitch=async function(id){
+  if(!window.CS.sb) return;
+  const v=window.CS.versions.find(x=>x.id===id);
+  if(!v) return;
+  // Flush any pending save before switching.
+  if(window.CS.saveTimer){clearTimeout(window.CS.saveTimer);window.CS.saveTimer=null;}
+  // Re-fetch in case another device updated it.
+  const{data,error}=await window.CS.sb.from('p1_versions').select('*').eq('id',id).single();
+  const ver=error?v:data;
+  window.CS.activeId=ver.id;
+  window.CS.activeName=ver.name;
+  CApplyState(ver.data||{});
+  CRenderPicker();
+  CStatus('Synced — '+ver.name,'cs-ok');
+};
+
+window.CSaveAs=async function(){
+  if(!window.CS.sb||!window.CS.me){alert('Sign in to save versions');return;}
+  const name=prompt('Name for this version:','My scenario');
+  if(!name||!name.trim()) return;
+  CStatus('Creating version…','cs-sync');
+  const state=CGetState();
+  const{data,error}=await window.CS.sb.from('p1_versions').insert({
+    name:name.trim(),is_default:false,data:state,
+    created_by:window.CS.me.id,updated_by:window.CS.me.id
+  }).select().single();
+  if(error){CStatus('Create error','cs-err');alert('Could not save: '+error.message);return;}
+  window.CS.versions.unshift(data);
+  window.CS.activeId=data.id;
+  window.CS.activeName=data.name;
+  CRenderPicker();
+  CStatus('Synced — '+data.name,'cs-ok');
+};
+
+window.CSetDefault=async function(){
+  if(!window.CS.sb||!window.CS.activeId) return;
+  CStatus('Setting default…','cs-sync');
+  // Clear current default(s), then promote this one.
+  const{error:e1}=await window.CS.sb.from('p1_versions').update({is_default:false}).eq('is_default',true);
+  if(e1){CStatus('Error','cs-err');console.error(e1);return;}
+  const{error:e2}=await window.CS.sb.from('p1_versions').update({is_default:true}).eq('id',window.CS.activeId);
+  if(e2){CStatus('Error','cs-err');console.error(e2);return;}
+  await CLoadVersions();
+  CRenderPicker();
+  CStatus('Default — '+window.CS.activeName,'cs-ok');
+};
+
+window.CDelete=async function(){
+  if(!window.CS.sb||!window.CS.activeId) return;
+  const v=window.CS.versions.find(x=>x.id===window.CS.activeId);
+  if(!v) return;
+  if(v.is_default){alert('Cannot delete the default version. Pick another version and click ★ Default first.');return;}
+  if(!confirm('Delete version &quot;'+v.name+'&quot;? This cannot be undone.')) return;
+  const{error}=await window.CS.sb.from('p1_versions').delete().eq('id',window.CS.activeId);
+  if(error){alert('Could not delete: '+error.message);return;}
+  await CLoadVersions();
+  const next=window.CS.versions.find(x=>x.is_default)||window.CS.versions[0];
+  if(next){await window.CSwitch(next.id);}
+};
+
+document.addEventListener('DOMContentLoaded',async()=>{
   renderSidebar();
   const a=ga();
   renderDealTable(a);
   ['a-fx','a-gfee','a-osh','a-psh','a-kela'].forEach(id=>
     document.getElementById(id).addEventListener('input',compute));
   compute();
+  // Now try to hydrate from cloud; if a version exists, apply it and recompute.
+  await CInit();
+  if(window.CS.ready){
+    // After CInit applied state, re-run compute (without triggering another save).
+    window.CS.hydrating=true;
+    try{
+      const a2=ga();
+      updateCells(a2);
+      const pl=calcPL(a2);
+      updateKPIs(pl,a2);
+      renderPL(pl,a2);
+      renderCards(pl,a2);
+    }finally{
+      window.CS.hydrating=false;
+    }
+  }
 });
 </script>
 </body>
@@ -1832,6 +2088,8 @@ const SU='https://ewdloawwudqkdrstqfet.supabase.co';
 const SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3ZGxvYXd3dWRxa2Ryc3RxZmV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc5NDYsImV4cCI6MjA5MTc2Mzk0Nn0.xMOdn6c9sQwrUoEpBk9MZUFHFSV0CLFTUrlyzkgRqUM';
 const sb=createClient(SU,SK);
 const SV='11';
+/* Expose Supabase client + auth state to embedded iframes (e.g. P1 model). */
+window.__resgro = { sb, getMe: () => me };
 let me=null,myP=null,decs=[],users=[],coms=[],vers=[],atts=[],opps=[],docs=[],minutes=[],intros=[];
 window.introF=null;
 window.stF=null;window.phF=null;window.srF='';window.oppF=null;window.mmF=null;
