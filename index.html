@@ -759,6 +759,105 @@ table.pl tr.pl-cash td:first-child{color:var(--gold-l);font-weight:700}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ── MOBILE ── */
+.asm-toggle{display:none !important}
+@media (max-width:720px){
+  body{overflow-x:hidden}
+  header{padding:0 12px;height:48px}
+  .brand-name{font-size:16px}
+  .brand-sub{display:none}
+  .tag{font-size:9px;padding:2px 7px;letter-spacing:.04em}
+
+  .kpis{padding:5px 6px;gap:3px}
+  .kpi{flex:1 1 calc(50% - 3px);min-width:0;padding:5px 8px}
+  .kpi .kl{font-size:8.5px}
+  .kpi .kv{font-size:12px}
+
+  .shell{flex-direction:column;height:calc(100vh - 96px);overflow:hidden}
+  aside{
+    width:100%;min-width:0;max-width:none;
+    max-height:0;overflow:hidden;
+    border-right:none;border-bottom:1px solid var(--gold-d);
+    transition:max-height .28s ease;
+    flex:0 0 auto;
+  }
+  aside.open{max-height:55vh;overflow-y:auto}
+  .resize-handle{display:none}
+  .s-hdr-sub{display:none}
+
+  main{flex:1 1 auto;min-height:0}
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .tab{padding:9px 11px;font-size:10.5px;flex-shrink:0;white-space:nowrap}
+  .asm-toggle{display:inline-block !important;color:var(--gold);border-bottom-color:transparent}
+  .asm-toggle.on{border-bottom-color:var(--gold);background:rgba(200,149,42,.06)}
+  .pane{padding:10px 8px}
+
+  /* Deal bar — compact */
+  .deal-bar{gap:6px;margin-bottom:8px}
+  .deal-bar h2{font-size:13px}
+  .deal-legend{font-size:8.5px;line-height:1.5}
+
+  /* Table — kill min-width, hide low-priority cols */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.dt{min-width:0;font-size:10.5px;table-layout:auto;width:100%}
+  table.dt thead tr.gh{display:none}
+
+  /* Hide cols: 4=country, 5=priority, 6=originated by, 12=orig sh %, 13=plc sh %, 18=split %, 19=consultant ZAR */
+  table.dt col:nth-child(4),
+  table.dt col:nth-child(5),
+  table.dt col:nth-child(6),
+  table.dt col:nth-child(12),
+  table.dt col:nth-child(13),
+  table.dt col:nth-child(18),
+  table.dt col:nth-child(19){display:none}
+  table.dt tr.sh2 th:nth-child(4),
+  table.dt tr.sh2 th:nth-child(5),
+  table.dt tr.sh2 th:nth-child(6),
+  table.dt tr.sh2 th:nth-child(12),
+  table.dt tr.sh2 th:nth-child(13),
+  table.dt tr.sh2 th:nth-child(18),
+  table.dt tr.sh2 th:nth-child(19){display:none}
+  table.dt tbody tr td:nth-child(4),
+  table.dt tbody tr td:nth-child(5),
+  table.dt tbody tr td:nth-child(6),
+  table.dt tbody tr td:nth-child(12),
+  table.dt tbody tr td:nth-child(13),
+  table.dt tbody tr td:nth-child(18),
+  table.dt tbody tr td:nth-child(19){display:none}
+  /* Tfoot has colspan=15 + 5 single cells; child(4)=split %, child(5)=consultant ZAR */
+  table.dt tfoot tr.tbl-foot td:nth-child(4),
+  table.dt tfoot tr.tbl-foot td:nth-child(5){display:none}
+
+  /* Tighten cells */
+  table.dt col.c-name{width:auto}
+  table.dt col.c-drag{width:18px}
+  table.dt col.c-active{width:34px}
+  td.drag-handle{font-size:11px;padding:0 2px}
+  .cell-inp,.cell-sel{font-size:11px;padding:6px 5px}
+  .sh2 th{padding:5px 4px;font-size:8.5px}
+
+  /* P&L — already scrollable, but compact */
+  table.pl{min-width:600px}
+  table.pl th{font-size:8.5px;padding:5px 5px}
+  table.pl td{font-size:10px;padding:4px 5px}
+  table.pl th:first-child{min-width:140px}
+
+  /* Metric cards */
+  .cards{grid-template-columns:repeat(2,1fr);gap:6px}
+  .card{padding:8px 10px}
+  .card .cv{font-size:13px}
+
+  /* Sidebar internal spacing */
+  .s-sec{padding:10px 12px 6px}
+  .cost-tbl th,.cost-tbl td{padding:3px 4px;font-size:10px}
+  .draw-inp.mo{width:44px}
+  .draw-inp.amt{width:80px}
+}
+@media (max-width:420px){
+  .kpi{flex:1 1 calc(33.33% - 3px)}
+  .deal-legend{display:none}
+}
 </style>
 </head>
 <body>
@@ -854,6 +953,7 @@ table.pl tr.pl-cash td:first-child{color:var(--gold-l);font-weight:700}
 <!-- MAIN -->
 <main>
   <div class=&quot;tabs&quot;>
+    <button class=&quot;tab asm-toggle&quot; onclick=&quot;toggleAsm(this)&quot;>⚙ Assumptions</button>
     <button class=&quot;tab on&quot; onclick=&quot;showTab('deals',this)&quot;>Deal Register</button>
     <button class=&quot;tab&quot; onclick=&quot;showTab('pl',this)&quot;>Monthly P&amp;L</button>
     <button class=&quot;tab&quot; onclick=&quot;showTab('metrics',this)&quot;>Key Metrics</button>
@@ -1365,8 +1465,14 @@ function compute(){
 
 function showTab(name,btn){
   ['deals','pl','metrics'].forEach(t=>document.getElementById('pane-'+t).style.display=t===name?'':'none');
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('.tab:not(.asm-toggle)').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
+}
+
+function toggleAsm(btn){
+  const aside=document.getElementById('sidebar');
+  const open=aside.classList.toggle('open');
+  btn.classList.toggle('on',open);
 }
 
 // ══════════════════════════════════════════════
