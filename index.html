@@ -966,9 +966,9 @@ table.pl tr.pl-cash td:first-child{color:var(--gold-l);font-weight:700}
   </div>
 
   <div class=&quot;s-sec&quot;>
-    <div class=&quot;s-lbl&quot;>Drawing Facility (Iroko — ZAR)</div>
+    <div class=&quot;s-lbl&quot;>Shareholder Loans (ZAR)</div>
     <div style=&quot;display:grid;grid-template-columns:1fr 52px 96px;gap:8px;padding-bottom:5px&quot;>
-      <div style=&quot;font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em&quot;>Tranche</div>
+      <div style=&quot;font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em&quot;>Source</div>
       <div style=&quot;font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;text-align:right&quot;>Month</div>
       <div style=&quot;font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;text-align:right&quot;>Amount</div>
     </div>
@@ -1105,7 +1105,7 @@ let deals=[
 let nextId=16;
 
 const COSTS=[
-  {l:&quot;Partner salaries (3×R2m)&quot;,  a:6000000, sm:1},
+  {l:&quot;Partner salaries&quot;,             a:0,       sm:1},
   {l:&quot;Executive assistant&quot;,        a:500000,  sm:1},
   {l:&quot;PI insurance&quot;,               a:120000,  sm:3},
   {l:&quot;Travel &amp; entertainment&quot;,     a:300000,  sm:1},
@@ -1118,7 +1118,7 @@ const COSTS=[
   {l:&quot;Banking fees&quot;,               a:24000,   sm:1},
   {l:&quot;Contingency&quot;,                a:60000,   sm:1},
 ];
-const DRAWS=[{l:&quot;Tranche 1&quot;,mo:1,amt:700000},{l:&quot;Tranche 2&quot;,mo:3,amt:750000},{l:&quot;Tranche 3&quot;,mo:9,amt:750000}];
+const DRAWS=[{l:&quot;Shareholder loan&quot;,mo:1,amt:100000}];
 
 // ══════════════════════════════════════════════
 // HELPERS
@@ -1415,8 +1415,8 @@ function renderPL(pl,a){
   h+=row('pl-sub','Total Costs',pl.map(m=>m.tc));
   h+=`<tr class=&quot;pl-hdr&quot;><td colspan=&quot;14&quot;>Cash Flow</td></tr>`;
   h+=row('pl-ebitda','EBITDA',pl.map(m=>m.ebitda));
-  h+=row('',`<span style=&quot;padding-left:14px;color:var(--purple)&quot;>+ Drawing facility (Iroko)</span>`,pl.map(m=>m.draw));
-  h+=row('pl-cash','Net Cash (EBITDA + Drawing)',pl.map(m=>m.nc));
+  h+=row('',`<span style=&quot;padding-left:14px;color:var(--purple)&quot;>+ Shareholder loans</span>`,pl.map(m=>m.draw));
+  h+=row('pl-cash','Net Cash (EBITDA + Loans)',pl.map(m=>m.nc));
   const cumV=pl.map((_,i)=>pl.slice(0,i+1).reduce((s,m)=>s+m.nc,0));
   h+=row('',`<span style=&quot;padding-left:14px&quot;>Cumulative cash</span>`,cumV,cumV[11]);
   document.getElementById('plBody').innerHTML=h;
@@ -1461,7 +1461,7 @@ function renderCards(pl,a){
     {l:&quot;Net Revenue&quot;,v:fR(net),hi:true,cls:net>=0?'pos':'neg'},
     {l:&quot;EBITDA&quot;,v:fR(ebitda),hi:true,cls:ebitda>=0?'pos':'neg'},
     {l:&quot;Revenue / Partner&quot;,v:fR(net/3),cls:net>0?'pos':'neg'},
-    {l:&quot;Drawing Facility&quot;,v:fR(drawing),sub:&quot;Iroko pre-revenue advance&quot;},
+    {l:&quot;Shareholder Loans&quot;,v:fR(drawing),sub:&quot;Pre-revenue capital&quot;},
     {l:&quot;Total Consultant Split&quot;,v:totCS>0?fR(totCS):'—',cls:totCS>0?'pos':'',sub:&quot;All active deals&quot;},
     {l:&quot;Net after Consultant&quot;,v:fR(gross-totCS-(origR+placeR)*a.kela+yr('tc')),cls:(gross-totCS)>=0?'pos':'neg'},
     {l:&quot;Prob-weighted Notional&quot;,v:'$'+probNotl.toFixed(0)+'m USD',sub:&quot;Expected deployed&quot;},
